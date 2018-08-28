@@ -24,7 +24,7 @@ var luisApiHostName = process.env.LuisApiHostName || 'westus.api.cognitive.micro
 var luisModelUrl = 'https://' + luisApiHostName + '/luis/v2.0/apps/' + luisAppId + '?subscription-key=' + luisSubscriptionKey + '&verbose=true&timezoneOffset=0&q=';
 var recognizer = new builder.LuisRecognizer(luisModelUrl);
 recognizer.onEnabled((context, callback) => {
-    if(context.dialogStack.length > 0){
+    if(context.dialogStack().length > 0){
         // check to see if we are in a conversation
         callback(null, false);
     } else {
@@ -60,7 +60,7 @@ bot.recognizer(recognizer);
 
 
 
- bot.dialog('greetings', [
+bot.dialog('greetings', [
     function(session, args, next){
         session.send('You reached the Greetings intent. You said \'%s\'.', session.message.text);
         session.send("Hi! I am Rhombus");
@@ -68,47 +68,50 @@ bot.recognizer(recognizer);
     },
     function(session, results, next){
         session.dialogData.name = results.response;
-        session.send(`Hello ${results.response}!`);
         builder.Prompts.text(session, 'Please tell me your Rhombus user name');
     },
-    function (session) {
-        session.replaceDialog('rootMenu');
+    function(session, results,args, next){
+        session.dialogData.email = results.response;
+        session.send(`Hello ${results.response}! Please type your request in plain text or type menu to get the list of guided workflow items...`);
+        session.endDialog();
     }
  ]).triggerAction({
      matches: 'Greetings'
  });
 
- bot.dialog('rootMenu', [
-     function (session, results) {
-         console.log(results)
-         //When using choice the result values are stored in results.response.entity
-         // Result indexes are stored in results.response.index
-         builder.Prompts.choice(session, "Here are a few things I can help you with:", 
-         'Apply Leave|Submit Expense|Search KB|Talk to Rhombus|Quit', { listStyle: builder.ListStyle.button });
-     },
-     function (session, results) {
-         switch (results.response.index) {
-             case 0:
-                 session.beginDialog('applyLeave');
-                 break;
-             case 1:
-                 session.beginDialog('submitExpense');
-                 break;
-             case 2:
-                 session.beginDialog('searchKB');
-                 break;
-            case 3:
-                 session.beginDialog('languageService');
-                 break;
-             default:
-                 session.endDialog();
-                 break;
-         }
-     },
-     function (session) {
-         session.endDialog();
-     }
- ]).reloadAction('showMenu', null, { matches: 'RootMenu' });
+bot.dialog('rootMenu', [
+    function (session, results) {
+        console.log(results)
+        //When using choice the result values are stored in results.response.entity
+        // Result indexes are stored in results.response.index
+        builder.Prompts.choice(session, "Here are a few things I can help you with:", 
+        'Apply Leave|Submit Expense|Search KB|I want to test NLP|Quit', { listStyle: builder.ListStyle.button });
+    },
+    function (session, results) {
+        switch (results.response.index) {
+            case 0:
+                session.beginDialog('applyLeave');
+                break;
+            case 1:
+                session.beginDialog('submitExpense');
+                break;
+            case 2:
+                session.beginDialog('searchKB');
+                break;
+            case 3: 
+                session.send('Please key in a query/request in day to day lanuguage...!!!')
+                session.endDialog() 
+            default:
+                session.endDialog();
+                break;
+        }
+    },
+    function (session) {
+        session.endDialog();
+    }
+]).triggerAction({ 
+    matches: 'RootMenu' 
+});
 
 // Apply leave
 
@@ -203,27 +206,27 @@ bot.dialog('submitExpense', [
     matches: 'ApplyExpense'
 });
 
-//Luis Service
-bot.dialog('languageService', [
-    function(session, args){
-        builder.Prompts.text(session, "Welcome to Rhombus natural language service... Please key in your requests in day to day language...");
-    },
-    function(session, args, next){
-        console.log("Query: " + args.response);
-        var intent = builder.EntityRecognizer.findAllEntities(args.intent.entities);
-        console.log("Intent: " + intent);
-        //var range = builder.EntityRecognizer.findAllEntities(intent.entities, 'builtin.number');
-        //console.log("Range: " + range);
-        // var user_query = builder.EntityRecognizer.findEntity(args.intent.entities, 'query');
-        // console.log(user_query);
-        // if (!user_query){
-        //     builder.Prompt.text(session, 'What do you want to do?');
-        // } else {
-        //     next({response: user_query.entity});
-        // }
-    },
-]
-);
+// //Luis Service
+// bot.dialog('languageService', [
+//     function(session, args){
+//         builder.Prompts.text(session, "Welcome to Rhombus natural language service... Please key in your requests in day to day language...");
+//     },
+//     function(session, args, next){
+//         console.log("Query: " + args.response);
+//         var intent = builder.EntityRecognizer.findAllEntities(args.intent.entities);
+//         console.log("Intent: " + intent);
+//         //var range = builder.EntityRecognizer.findAllEntities(intent.entities, 'builtin.number');
+//         //console.log("Range: " + range);
+//         // var user_query = builder.EntityRecognizer.findEntity(args.intent.entities, 'query');
+//         // console.log(user_query);
+//         // if (!user_query){
+//         //     builder.Prompt.text(session, 'What do you want to do?');
+//         // } else {
+//         //     next({response: user_query.entity});
+//         // }
+//     },
+// ]
+// );
 
 
  var expenseTypes = [
@@ -235,20 +238,20 @@ bot.dialog('languageService', [
  ];
 
  bot.dialog('searchKB', [
-    function(session, args, next){
-        session.send('You reached the searchKB intent. You said \'%s\'.', session.message.text);
-        // builder.EntityRecognizer.findEntity(args.intent.entities, 'query')
+    function(session, args, next, context){
         session.send("Welcome to Rhombus FAQ System.");
-        builder.Prompts.text(session, "What would you like to get information on?");
-    },
-    function(session, results){
-        session.dialogData.faqquery = results.response;
-        session.send(`Looking for information relevant to ${session.dialogData.faqquery}`);
-        showFaqResults(session); 
-        session.sendTyping()
-    },
-    function (session) {
-        session.replaceDialog('rootMenu');
+        session.send('You reached the search intent');
+        //console.log("Args: " + JSON.stringify(args));
+        //console.log("Session: " + session.message.text);
+        // builder.EntityRecognizer.findEntity(args.intent.entities, 'query')
+        //builder.Prompts.text(session, "Please key in the topic you want to get more information on!");
+    //},
+    //function(session, results){
+        session.dialogData.faqquery = session.message.text;
+        session.send("Looking for relevant information");
+        session.sendTyping();
+        showFaqResults(session);
+        session.endDialog();
     }
     ]
 ).triggerAction({
@@ -260,6 +263,7 @@ var showFaqResults = (function (session) {
     var post_data = {question: session.message.text};
     post_data = JSON.stringify(post_data);
     var resData = "";
+    session.sendTyping()
     var post_options = {
         host: 'avifaq.azurewebsites.net',
         path: '/qnamaker/knowledgebases/b55742aa-b120-43e3-a500-bdd931bd27d6/generateAnswer',
@@ -271,7 +275,7 @@ var showFaqResults = (function (session) {
             'Content-Length': Buffer.byteLength(post_data)
         }
     };
-
+    session.sendTyping()
     var post_req = https.request(post_options, function(res) {
         res.setEncoding('utf8');
         res.on('data', function (chunk) {
@@ -313,12 +317,14 @@ var showFaqResults = (function (session) {
                     ]
                 }
             }
+            session.sendTyping()
             var msg = new builder.Message(session).addAttachment(card);
             session.send(msg);
             resData = "";
         });
     });
     // post the data
+    session.sendTyping()
     post_req.write(post_data);
     post_req.end();
 });
@@ -331,7 +337,8 @@ bot.dialog('help', [
     }
     ]
 ).triggerAction({
-    matches: /^help$/i
+//    matches: /^help$/i
+      matches: 'help'
 });
 
 bot.dialog('noneDialog', [
